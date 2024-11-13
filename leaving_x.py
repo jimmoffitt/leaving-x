@@ -23,20 +23,15 @@ def save_last_processed_timestamp(timestamp):
     with open(LAST_PROCESSED_TIMESTAMP_FILE, "w") as f:
         f.write(timestamp.strftime('%Y-%m-%d %H:%M:%S'))
 
-async def create_post_async(config, tweet, bluesky_poster): 
-    # Run the synchronous create_post method in a separate thread
-    loop = asyncio.get_running_loop()
+async def create_post(config, tweet, bluesky_poster): 
     try:
-        await loop.run_in_executor(
-            None,  # Use the default executor
-            bluesky_poster.create_post,  # The function to execute
-            config, 
-            tweet
-        )
-      # Save the timestamp only after successful post
-        save_last_processed_timestamp(datetime.strptime(tweet['timestamp'], '%Y-%m-%d %H:%M:%S')) 
+        # Directly await the asynchronous create_post method
+        await bluesky_poster.create_post(config, tweet)
+        
+        # Save the timestamp only after successful post
+        save_last_processed_timestamp(datetime.strptime(tweet['timestamp'], '%Y-%m-%d %H:%M:%S'))
     except Exception as e:
-        print(f"Error posting tweet: {e}")  
+        print(f"Error posting tweet: {e}")
 
 async def main():
     # Get the directory of the current script
@@ -50,6 +45,7 @@ async def main():
     BLUESKY_PASSWORD = os.getenv("BLUESKY_PASSWORD")
     BLUESKY_PDS_URL = os.getenv("BLUESKY_PDS_URL")
     TWITTER_DATA_ROOT_FOLDER = os.getenv("TWITTER_DATA_ROOT_FOLDER")
+    SLEEP_INTERVAL = os.getenv("SLEEP_INTERVAL")
 
     # A way to pass configuration details to other components. 
     config = {}
@@ -61,22 +57,25 @@ async def main():
     config['tweet_objects_file'] = str(script_dir / TWITTER_DATA_ROOT_FOLDER / 'tweets.js')
     
     # Create TweetParser instance. 
-    twitter_parser = TweetArchiveParser(config['tweet_objects_file'])
+    tweet_parser = TweetArchiveParser(config['tweet_objects_file'])
 
     # Create BlueskyPoster instance. 
     bluesky_poster = BlueskyPoster(pds_url=BLUESKY_PDS_URL, handle=BLUESKY_HANDLE, password=BLUESKY_PASSWORD) 
     
     # Load a collection of Tweets loaded from a downloaded Twitter account archives. 
     tweets_raw = []
-    tweets_raw = twitter_parser.load_twitter_archive()
+    tweets_raw = tweet_parser.load_twitter_archive()
 
     tweets = []
 
+    # Filter out Replies? 
+    tweets = tweet_parser.filter_out_replies(tweets_raw)
+
     # OK, filter the Tweet collection and extract the metdata needed for posting and wanted for statistics. 
-    tweets = twitter_parser.extract_metadata(tweets_raw)
+    tweets = tweet_parser.extract_metadata(tweets_raw)
 
     # Generate a set of statistics and time-series data from the Tweet collection. 
-    print(f"{twitter_parser.get_stats2(tweets)}")
+    print(f"{tweet_parser.get_stats(tweets)}")
       
     # Load last processed timestamp
     last_processed_timestamp = load_last_processed_timestamp()
@@ -88,12 +87,12 @@ async def main():
     async with aiohttp.ClientSession() as session:
         tasks = []
         for tweet in tweets:
-            task = asyncio.create_task(create_post_async(config, tweet, bluesky_poster))
+            task = asyncio.create_task(create_post(config, tweet, bluesky_poster))
             tasks.append(task)
 
             # Introduce a small delay to avoid hitting rate limits
-            await asyncio.sleep(3.6)  # 3.6 seconds = 1000 posts per hour
-
+            await asyncio.sleep(SLEEP_INTERVAL)  # 3.6 seconds = 1000 posts per hour
+            
         await asyncio.gather(*tasks)
 
 if __name__ == "__main__":
