@@ -11,6 +11,10 @@ class TweetArchiveParser:
         #self.tweets = []
      
     def load_twitter_archive(self, tweet_objects_path = None):
+        
+        tweets_raw = []
+        tweets = []
+        
         try:
 
             if tweet_objects_path == None:
@@ -31,9 +35,13 @@ class TweetArchiveParser:
                 json_string = file_content[start_index:]  
                 
                 # Parse the JSON string
-                data = json.loads(json_string)
+                tweets_raw = json.loads(json_string)
+
+            #Strip out top `tweet` attributes.
+            for item in tweets_raw:
+                tweets.append(item['tweet'])
                 
-            return data
+            return tweets
         except (json.JSONDecodeError, ValueError) as e:
             print(f"Error decoding JSON from {tweet_objects_path}: {e}")
             return []  # Or handle the error as needed
@@ -62,23 +70,34 @@ class TweetArchiveParser:
         Returns:
         A new list containing only the tweets that are not replies.
         """
-        clean_tweets = []
-        for tweet_obj in tweets:
-            tweet = tweet_obj["tweet"]
+        not_reply_tweets = []
+
+        for tweet in tweets:
+
+            # Check if tweet is a reply (has 'in_reply_to_' fields) or starts with '@'
             is_reply = any(key.startswith("in_reply_to_") for key in tweet)
-            if not is_reply:
-                clean_tweets.append(tweet_obj)
-        return clean_tweets
+
+            if tweet.get('full_text', '').startswith('@'):
+                pass
+
+            starts_with_at = tweet.get('full_text', '').startswith("@")
+        
+            if not is_reply and not starts_with_at:
+                if '@' in tweet["full_text"][0:10]:
+                    pass
+                not_reply_tweets.append(tweet)
+                print(f"Adding Tweet: {tweet['full_text']} ") 
+            else:
+                print(f"Tweet skipped as Reply: {tweet['full_text']} ")    
+                
+        return not_reply_tweets
     
-    def extract_metadata(self, tweets_raw):
+    def extract_metadata(self, tweets):
         parsed_tweets = []
 
-        tweets = []
-        for item in tweets_raw:
-            tweets.append(item['tweet'])
-
-        # Sort.     
-        tweets.sort(key=lambda tweet: datetime.strptime(tweet["created_at"], "%a %b %d %H:%M:%S +0000 %Y")) 
+        
+        # Already sorted.     
+        #tweets.sort(key=lambda tweet: datetime.strptime(tweet["created_at"], "%a %b %d %H:%M:%S +0000 %Y")) 
         
         for tweet in tweets:
             timestamp = self.reformat_timestamp(tweet.get('created_at'))
@@ -206,6 +225,11 @@ def main():
     # Load archive file.
     tweets = tweet_parser.load_twitter_archive(tweet_objects_path)
 
+    # Let's sort it!
+    tweets.sort(key=lambda tweet: datetime.strptime(tweet["created_at"], "%a %b %d %H:%M:%S +0000 %Y")) 
+
+    tweets = tweet_parser.filter_out_replies(tweets)
+    
     # Load a Tweet
     #tweet = tweets_raw[888]['tweet']
     #tweet_id = '1217911688827211777'
@@ -222,9 +246,6 @@ def main():
 
     #Set up our final list
     tweets = []
-
-    # Filter out Replies? 
-    tweets = tweet_parser.filter_out_replies(tweet_metadata)
     
     # Create a file name for the JSON output
     output_file = script_dir / TWITTER_DATA_ROOT_FOLDER / 'tweet_metadata.json'  
