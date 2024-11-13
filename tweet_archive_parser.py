@@ -52,6 +52,24 @@ class TweetArchiveParser:
         dt_object = datetime.strptime(timestamp_str, '%a %b %d %H:%M:%S %z %Y')
         return dt_object.strftime('%Y-%m-%d %H:%M:%S')
 
+    def filter_out_replies(self, tweets):
+        """
+        Filters out reply tweets from a list of tweet objects.
+
+        Args:
+        tweets: A list of tweet objects.
+
+        Returns:
+        A new list containing only the tweets that are not replies.
+        """
+        clean_tweets = []
+        for tweet_obj in tweets:
+            tweet = tweet_obj["tweet"]
+            is_reply = any(key.startswith("in_reply_to_") for key in tweet)
+            if not is_reply:
+                clean_tweets.append(tweet_obj)
+        return clean_tweets
+    
     def extract_metadata(self, tweets_raw):
         parsed_tweets = []
 
@@ -65,12 +83,6 @@ class TweetArchiveParser:
         for tweet in tweets:
             timestamp = self.reformat_timestamp(tweet.get('created_at'))
             tweet_id = tweet.get('id', None)
-
-            if tweet_id == '1662845607046795264':
-                pass
-            if tweet_id == '1217911688827211777':
-                pass
-
 
             # Establishing `message` as the Tweet text contents. 
             message = tweet.get('full_text', '')
@@ -109,7 +121,7 @@ class TweetArchiveParser:
 
         return parsed_tweets
 
-    def get_stats2(self, tweets):
+    def get_stats(self, tweets):
 
         # TODO: expand
         """ 
@@ -140,18 +152,25 @@ class TweetArchiveParser:
         total_tweet_length = sum(len(tweet["text"]) for tweet in tweets)
         stats['avg_tweet_length'] = total_tweet_length / stats['num_tweets']
 
-        num_of_hashtags = 0
+        reply_count = 0
+        for item in tweets:
+            is_reply = any(key.startswith("in_reply_to_") for key in item)
+            if is_reply:
+                reply_count += 1
+        print(f"Number of Reply Tweets: {reply_count}")    
+
+        hashtag_count = 0
         for item in tweets:
             if len(item['hashtags']) > 0:
-                num_of_hashtags += len(item['hashtags'])
-        print(f"Number of #Hashtags used: {num_of_hashtags}")    
+                hashtag_count += len(item['hashtags'])
+        print(f"Number of #Hashtags used: {hashtag_count}")    
 
          # Let's look at mentions:
-        num_of_mentions = 0
+        mention_count = 0
         for item in tweets:
             if len(item['mentions']) > 0:
-                num_of_mentions += len(item['mentions'])
-        print(f"Number of @Mentions made: {num_of_mentions}") 
+                mention_count += len(item['mentions'])
+        print(f"Number of @Mentions made: {mention_count}") 
         # TODO: OK, so we can count, now let's build a collection and surface top choices, etc. 
         # TODO: and it made be good to generate a time-series of entity counts. 
 
@@ -200,6 +219,12 @@ def main():
     # Tour the Tweets and cherry-pick attributes need to post to target network. 
     # Also handle the weird parsing details. Truncated Tweets? Extended entities? 
     tweet_metadata = tweet_parser.extract_metadata(tweets)
+
+    #Set up our final list
+    tweets = []
+
+    # Filter out Replies? 
+    tweets = tweet_parser.filter_out_replies(tweet_metadata)
     
     # Create a file name for the JSON output
     output_file = script_dir / TWITTER_DATA_ROOT_FOLDER / 'tweet_metadata.json'  
@@ -208,7 +233,7 @@ def main():
     with open(output_file, 'w') as f:
         json.dump(tweet_metadata, f, indent=4)  # Use indent for pretty printing
 
-    stats = tweet_parser.get_stats2(tweet_metadata)
+    stats = tweet_parser.get_stats(tweets)
     print(f"Here is the stats object: \n {stats}")
 
     print('Finished')
