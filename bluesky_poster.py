@@ -151,7 +151,6 @@ class BlueskyPoster:
         post = {
             # TODO: make general with pds_url
             "$type": "app.bsky.feed.post",
-            #"text": tweet['text'] + addendum,
             "text": tweet['text'],
             "createdAt": now,
             "facets": facets,
@@ -164,7 +163,7 @@ class BlueskyPoster:
                 "images": []
             }
             for image_path in tweet['image_paths']:
-                blob = self.upload_image(config, image_path)
+                blob = await self.upload_image(config, image_path)
                 if blob:
                     image_setting = {
                         "alt": '',
