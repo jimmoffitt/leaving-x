@@ -27,6 +27,18 @@ def parse_urls(text: str) -> List[Dict]:
         })
     return spans
 
+def parse_tags(text: str) -> List[Dict]:
+    spans = []
+    tag_regex = rb"[$|\W](#([a-zA-Z0-9_]+))"
+    text_bytes = text.encode("UTF-8")
+    for h in re.finditer(tag_regex, text_bytes):
+        spans.append({
+            "start": h.start(1),
+            "end": h.end(1),
+            "tag": h.group(1)[1:].decode("UTF-8")
+        })
+    return spans
+
 def parse_facets(text: str, pds_url: str) -> List[Dict]:
     facets = []
     for mention in parse_mentions(text):
@@ -42,8 +54,12 @@ def parse_facets(text: str, pds_url: str) -> List[Dict]:
                 "byteStart": mention["start"],
                 "byteEnd": mention["end"],
             },
-            "features": [{"$type": "app.bsky.richtext.facet#mention", "did": did}],
-        })
+            "features": [
+                {
+                    "$type": "app.bsky.richtext.facet#mention", 
+                    "did": did}],
+                }
+        )
     for url in parse_urls(text):
         facets.append({
             "index": {
@@ -57,4 +73,19 @@ def parse_facets(text: str, pds_url: str) -> List[Dict]:
                 }
             ],
         })
+    for tag in parse_tags(text):
+        facets.append({
+            "index": {
+                "byteStart": tag["start"],
+                "byteEnd": tag["end"],
+            },
+            "features": [
+                {
+                    "$type": "app.bsky.richtext.facet#tag",
+                    "tag": tag["tag"]
+                }
+            ],
+        })
+
+
     return facets
