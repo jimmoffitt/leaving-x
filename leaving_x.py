@@ -45,7 +45,15 @@ async def main():
     BLUESKY_PASSWORD = os.getenv("BLUESKY_PASSWORD")
     BLUESKY_PDS_URL = os.getenv("BLUESKY_PDS_URL")
     TWITTER_DATA_ROOT_FOLDER = os.getenv("TWITTER_DATA_ROOT_FOLDER")
-    SLEEP_INTERVAL = os.getenv("SLEEP_INTERVAL")
+    SLEEP_INTERVAL_SECONDS = os.getenv("SLEEP_INTERVAL_SECONDS")
+
+    try:
+        # Attempt to convert it to a float
+        SLEEP_INTERVAL_SECONDS = float(SLEEP_INTERVAL_SECONDS)
+    except (TypeError, ValueError):
+        # Handle the case where it's not a valid float (e.g., if it's None or an invalid string)
+        print("Invalid or missing SLEEP_INTERVAL value; using default of 1.0 seconds.")
+        SLEEP_INTERVAL_SECONDS = 60.0  # Default value, or you could raise an error if appropriate
 
     # A way to pass configuration details to other components. 
     config = {}
@@ -63,16 +71,17 @@ async def main():
     bluesky_poster = BlueskyPoster(pds_url=BLUESKY_PDS_URL, handle=BLUESKY_HANDLE, password=BLUESKY_PASSWORD) 
     
     # Load a collection of Tweets loaded from a downloaded Twitter account archives. 
-    tweets_raw = []
-    tweets_raw = tweet_parser.load_twitter_archive()
-
     tweets = []
+    tweets = tweet_parser.load_twitter_archive(config['tweet_objects_file'])
 
+    # Let's sort it!
+    tweets.sort(key=lambda tweet: datetime.strptime(tweet["created_at"], "%a %b %d %H:%M:%S +0000 %Y")) 
+    
     # Filter out Replies? 
-    tweets = tweet_parser.filter_out_replies(tweets_raw)
+    tweets = tweet_parser.filter_out_replies(tweets)
 
     # OK, filter the Tweet collection and extract the metdata needed for posting and wanted for statistics. 
-    tweets = tweet_parser.extract_metadata(tweets_raw)
+    tweets = tweet_parser.extract_metadata(tweets)
 
     # Generate a set of statistics and time-series data from the Tweet collection. 
     print(f"{tweet_parser.get_stats(tweets)}")
@@ -91,7 +100,7 @@ async def main():
             tasks.append(task)
 
             # Introduce a small delay to avoid hitting rate limits
-            await asyncio.sleep(SLEEP_INTERVAL)  # 3.6 seconds = 1000 posts per hour
+            await asyncio.sleep(SLEEP_INTERVAL_SECONDS)  # 3.6 seconds = 1000 posts per hour
             
         await asyncio.gather(*tasks)
 
