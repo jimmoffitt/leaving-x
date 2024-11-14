@@ -8,7 +8,7 @@ As a developer, I am no longer interested in working with the Twitter/X API. Tha
 
 There are plenty of reason to move from X, including the pay-to-verify joke, the removal of the trust-and-safety team, and the recent change in Block behavior. As a developer, the $100/month for hobbyist levels of data access is laughable. 
 
-So, this project started as an exercise to start learning the Bluesky API and the underlying AT Protocol. From the start, I loved the underlying concepts and design for a distributing network. A place where the entire ecosystem can not be bought by someone who wants to take it in a direction you do not support. 
+So, this project started as an exercise to start learning the Bluesky API and the underlying AT Protocol. From the start, I loved the underlying concepts and design for a distributed network. A place where the entire ecosystem can not be bought by someone who wants to take it in a direction you do not support. 
 
 For me, the last step for deleting my account was somehow saving the decade of content that I had sometimes curated with intention. Hundreds of fun photographs, screenshots, travel notes, and professional updates. 
 
@@ -119,5 +119,5 @@ main(): Loads environment variables, configures components, loads tweets, filter
 ## Error Handling
 Errors during the posting process are caught and printed. If an error occurs with a specific tweet, it is skipped, and the script continues to the next one.
 
-## License
-This project is licensed under the Apache 2.0 License.
+License
+This project is licensed under the MIT License.
