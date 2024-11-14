@@ -18,17 +18,61 @@ If you are a Python developer, and want to manage the process yourself, you are 
 
 
 
-## Setting up the `.env.local` file
+The `BlueskyPoster` class provides a tool for posting Twitter archive content to Bluesky, enabling seamless transition of posts from Twitter (X) to Bluesky’s platform. The tool allows for uploading images, scheduling posts, and managing authentication with Bluesky's API.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [License](#license)
+
+## Overview
+
+This script reads from a downloaded Twitter archive, then posts the content to Bluesky using its API. You can manage authentication, configure posting intervals, and handle various media types, making it an efficient way to migrate posts to Bluesky.
+
+## Features
+
+- **Automated Posting**: Read and post from a Twitter archive.
+- **Media Support**: Upload and post images associated with your Twitter archive.
+- **Scheduling**: Set intervals between posts for a timed rollout.
+- **Environment Configuration**: Easily configure API credentials and archive locations.
+
+
+## Installation
+
+1. **Clone the repository**
+
+   Clone the repository to your local environment:
+
+   ```bash
+   git clone https://github.com/jimmoffitt/leaving-x.git
+   cd leaving-x
+
+2. **Install requirements
+
+Ensure you have Python 3.7+ installed. Then, install required libraries:
+
+    ```bash
+    pip install -r requirements.txt
+
+3. Set up Environement Variables
+
+Create a .env.local file in the root directory based on .env.local.example (see the Configuration section for details).
+
+
+## Configuration
 
 Before running the script, you’ll need to create a `.env.local` file in the root directory of your project. This file contains environment variables necessary for Bluesky API authentication and Twitter archive configuration settings. Follow these steps:
 
-### Copy the example file to create a new .env.local file
+1. Copy the example file to create a new .env.local file
 ```bash
 cp .env.local.example .env.local
 ```
 
-Update the `.env.local` file with your specific settings:
-
+2. Update the `.env.local` file with your specific settings:
 
 ```bash
 # Bluesky API authentication details
@@ -45,60 +89,35 @@ SLEEP_INTERVAL_SECONDS = 60  # Adjust interval between posts (in seconds)
 
 After setting up your `.env.local` file with these values, the script will be able to read the environment variables needed for authentication and data handling.
 
+## Usage
 
 
-Table of Contents
-Requirements
-Setup
-Configuration
-Usage
-Details
-Files Used
-Main Functions
-Error Handling
-License
-Requirements
-Python 3.8+
-Libraries: tweet_archive_parser, bluesky_poster, aiohttp, asyncio, python-dotenv
-A valid .env.local file with credentials for both Twitter and Bluesky
-Setup
-Clone this repository.
-Install required dependencies: pip install -r requirements.txt
-Prepare the .env.local file in the same directory as the script with the following environment variables:
-makefile
-Copy code
-BLUESKY_HANDLE=<your_bluesky_handle>
-BLUESKY_PASSWORD=<your_bluesky_password>
-BLUESKY_PDS_URL=<your_bluesky_pds_url>
-TWITTER_DATA_ROOT_FOLDER=<path_to_your_twitter_data_folder>
-SLEEP_INTERVAL_SECONDS=<desired_delay_in_seconds_between_posts>
-Configuration
-Make sure the TWITTER_DATA_ROOT_FOLDER points to the root folder of your downloaded Twitter archive, which should include:
 
-tweets.js: Contains the tweet data.
-tweets_media: Directory with images associated with the tweets.
-Usage
-To run the script: python script_name.py
+# Notes and todos
 
 The script will:
 
-Load the last processed tweet's timestamp from last_processed_timestamp.txt.
-Parse the Twitter archive to load tweets created after the last processed timestamp.
-Filter out replies and extract metadata for posting.
-Post each tweet to Bluesky, introducing a delay to avoid rate limits.
-Update last_processed_timestamp.txt to track progress.
-Details
+* Load the last processed tweet's timestamp from last_processed_timestamp.txt.
+* Parse the Twitter archive to load tweets created after the last processed timestamp.
+* Filter out replies and extract metadata for posting.
+* Post each tweet to Bluesky, introducing a delay to avoid rate limits.
+* Update last_processed_timestamp.txt to track progress.
+
+## Details
 Files Used
-tweets.js: A file containing tweet data from the Twitter archive.
-tweets_media/: Folder with media files (images) associated with the tweets.
-last_processed_timestamp.txt: Stores the timestamp of the last successfully posted tweet to continue from that point on the next run.
-Main Functions
-load_last_processed_timestamp(): Loads the last posted tweet's timestamp.
-save_last_processed_timestamp(timestamp): Saves the timestamp of the most recent post to file.
-create_post(config, tweet, bluesky_poster): Posts a tweet to Bluesky, handling any errors and updating the timestamp upon success.
+* tweets.js: A file containing tweet data from the Twitter archive.
+* tweets_media/: Folder with media files (images) associated with the * tweets.
+* last_processed_timestamp.txt: Stores the timestamp of the last successfully posted tweet to continue from that point on the next run.
+
+## Main Functions
+* load_last_processed_timestamp(): Loads the last posted tweet's timestamp.
+* save_last_processed_timestamp(timestamp): Saves the timestamp of the most recent post to file.
+* create_post(config, tweet, bluesky_poster): Posts a tweet to Bluesky, handling any errors and updating the timestamp upon success.
 main(): Loads environment variables, configures components, loads tweets, filters, posts, and saves progress.
-Error Handling
+
+[] TODO
+## Error Handling
 Errors during the posting process are caught and printed. If an error occurs with a specific tweet, it is skipped, and the script continues to the next one.
 
-License
-This project is licensed under the MIT License.
+## License
+This project is licensed under the Apache 2.0 License.
