@@ -10,6 +10,7 @@ from pathlib import Path
 import asyncio
 import aiohttp
 from datetime import datetime, timezone
+from datetime import timedelta
 from dotenv import load_dotenv
 
 class BlueskyPoster:
@@ -51,7 +52,14 @@ class BlueskyPoster:
                     print("Authentication failed")
                     return None
 
-                # ... (get session_expiry from session response)
+                # Assuming the session response includes `accessJwt` and a token expiry time in seconds (if available)
+                self.access_jwt = self.session.get("accessJwt")
+                self.did = self.session.get("did")
+                
+                # Set session expiry if token has an expiration field (adjust based on actual API response)
+                expiry_seconds = self.session.get("expires_in", 3600)  # Default to 1 hour if unspecified
+                self.session_expiry = datetime.now(timezone.utc) + timedelta(seconds=expiry_seconds)
+
 
             return self.session
 
@@ -80,7 +88,7 @@ class BlueskyPoster:
                     config['pds_url'] + "/xrpc/com.atproto.repo.uploadBlob",
                     headers={
                         "Content-Type": "image/png",
-                        "Authorization": "Bearer " + config['accessJwt']
+                        "Authorization": "Bearer " + self.access_jwt
                     },
                     data=img_bytes,
                 )
@@ -135,8 +143,8 @@ class BlueskyPoster:
         if bsky_session is None:
             return
 
-        config['accessJwt'] = bsky_session["accessJwt"]
-        config['did'] = bsky_session["did"]
+        #config['accessJwt'] = bsky_session["accessJwt"]
+        #config['did'] = bsky_session["did"]
 
         tweet['text' ]= self.manage_bluesky_message_length(tweet)
 
@@ -176,9 +184,9 @@ class BlueskyPoster:
         async with aiohttp.ClientSession() as session:  # Create aiohttp ClientSession here
             resp = await session.post(  # Use await for async post
                 config['pds_url'] + "/xrpc/com.atproto.repo.createRecord",
-                headers={"Authorization": "Bearer " + bsky_session["accessJwt"]},
+                headers={"Authorization": "Bearer " + self.access_jwt},
                 json={
-                    "repo":bsky_session["did"],
+                    "repo": self.did,
                     "collection": "app.bsky.feed.post",
                     "record": post,
                 },
