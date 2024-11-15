@@ -98,9 +98,9 @@ After setting up your `.env.local` file with these values, the script will be ab
 
 
 
-### 
+## More details 
 
-## External Libraries
+### External Libraries
 * tweet_archive_parser: Parses Twitter archive data.
 * bluesky_poster: Posts content to Bluesky.
 * asyncio: Asynchronous programming.
@@ -110,11 +110,17 @@ After setting up your `.env.local` file with these values, the script will be ab
 * os: Operating system interactions.
 * dotenv: Environment variable loading.
 
-## Main Functions
-* main: The main function that orchestrates the script's logic. Loads the Tweet archive into a list/array. 
-* create_post: Creates a post on Bluesky.
-* load_last_processed_timestamp: Loads the last processed timestamp from a file.
-* save_last_processed_timestamp: Saves the last processed timestamp to a file.
+### Files Used
+* tweets.js: A file containing tweet data from the Twitter archive.
+* tweets_media/: Folder with media files (images) associated with the * tweets.
+* last_processed_timestamp.txt: Stores the timestamp of the last successfully posted tweet to continue from that point on the next run.
+
+[] TODO
+### Main Functions
+* `leaving_x.py` **main**: The main function that orchestrates the script's logic. Loads the Tweet archive into a list/array. 
+* `bluesky_poster.py` **create_post**: Creates a post on Bluesky.
+* `leaving_x.py` **load_last_processed_timestamp**: Loads the last processed timestamp from a file.
+* `leaving_x.py` **save_last_processed_timestamp**: Saves the last processed timestamp to a file.
 
 # Notes and todos
 
@@ -126,21 +132,9 @@ The script will:
 * Post each tweet to Bluesky, introducing a delay to avoid rate limits.
 * Update last_processed_timestamp.txt to track progress.
 
-## Details
-Files Used
-* tweets.js: A file containing tweet data from the Twitter archive.
-* tweets_media/: Folder with media files (images) associated with the * tweets.
-* last_processed_timestamp.txt: Stores the timestamp of the last successfully posted tweet to continue from that point on the next run.
 
-## Main Functions
-* load_last_processed_timestamp(): Loads the last posted tweet's timestamp.
-* save_last_processed_timestamp(timestamp): Saves the timestamp of the most recent post to file.
-* create_post(config, tweet, bluesky_poster): Posts a tweet to Bluesky, handling any errors and updating the timestamp upon success.
-main(): Loads environment variables, configures components, loads tweets, filters, posts, and saves progress.
-
-[] TODO
 ## Error Handling
 Errors during the posting process are caught and printed. If an error occurs with a specific tweet, it is skipped, and the script continues to the next one.
 
 License
-This project is licensed under the MIT License.
+This project is licensed under the Apache 2.0 License.
