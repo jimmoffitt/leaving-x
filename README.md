@@ -8,15 +8,21 @@ As a developer, I am no longer interested in working with the Twitter/X API. Tha
 
 There are plenty of reason to move from X, including the paying for verification, the removal of the trust-and-safety team, and the recent change in Block behavior. For developers, the $100/month for hobbyist levels of data access can be hard to justify. 
 
-So, this project started as an exercise to start learning the Bluesky API and the underlying AT Protocol. From the start, I loved the underlying concepts and design for a distributed network. A place where the entire ecosystem can not be bought by someone who wants to take it in a direction you do not support. 
+So, this project started as an exercise to start learning the Bluesky API and the underlying AT Protocol. From the start, I loved the underlying concepts and design for a distributed network. A place where you and your data can be hosted where you want. Overall, the protocol reads like rebuilding the conepts that Twitter evolved to and re-designing from the ground up. 
 
 For me, the last step for deleting my account was somehow saving the decade of content that I had sometimes curated with intention. Hundreds of fun photographs, screenshots, travel notes, and professional updates. 
 
-So if you want to port your Twitter archive to somewhere else, I highly encourage that. This is not a novel idea, and there are great tools out there to help you do that. Including some that provides this service as a Chrome extension. 
+So if you are thinking about archiving your Tweet history, this tool is one way to do that. Assuming you want to work with Python, are OK without a front-end, and are learning the Bluesky API. (If you are not interesting working with your own Python code, there are other migration tools that run as Chrome extensions, like Porto.)
 
-If you are a Python developer, and want to manage the process yourself, you are in the right place ;) 
+So, if you are a Python developer, and want to manage the process yourself, you are in the right place ;) 
 
-The `leaving_x.py` script provides a tool for posting Twitter archive content to Bluesky, enabling seamless transition of posts from Twitter (X) to Bluesky’s platform. The tool allows for uploading images, scheduling posts, and managing authentication with Bluesky's API.
+The `leaving_x.py` script provides a tool for posting Twitter archive content to Bluesky. The sript relies on `tweet_archive_parser.py` code that provides a TwitterArchiveParser class. There is also a `bluesky_poster.py` file that manages Bluesky requests with a BlueskyPoster class.  
+
+### So, tell me more about this tool 
+* Configuration is managed with a `.env.local` file that sets *environmentat variables*. These include Bluesky authentication details and script options (archive data path and posting interval)
+* This tool knows how to naviage the Twitter archive file structure and parse Tweet JSON objects. These objects have evolved since 2006, and unexpected results are likely due to the code not parsing correctly (or incompletely). 
+* The main mission of this tool is to manage the posting to Bluesky. Currently, it posts on a specified interval (which defaults to every 10 minutes).  Automated Posting: Read and post from a Twitter archive.
+* This tool is designed to manage the posting images. Much of the code here is focused on mapping image file names to Tweet metadata, uploading images to Bluesky, and attaching the images to the Bluesky `createRecord` request. 
 
 ## Table of Contents
 
@@ -29,20 +35,16 @@ The `leaving_x.py` script provides a tool for posting Twitter archive content to
 
 ## Overview
 
-The `leaving_x.py` script reads from a downloaded Twitter archive, then posts the content to Bluesky using its API. You can manage authentication, configure posting intervals, and handle various media types, making it an efficient way to migrate posts to Bluesky.
+The `leaving_x.py` script reads from a downloaded Twitter archive, then posts the content to Bluesky using its API. The script manages authentication, posts on a configured interval, and handles various media types.
 
 The `leaving_x.py` depends on two classes:
 * TweetArchiveParser: Parses Twitter archive data.
 * BlueskyPoster: Posts content to Bluesky.
 
-
-## Features
-
-- **Automated Posting**: Read and post from a Twitter archive.
-- **Media Support**: Upload and post images associated with your Twitter archive.
-- **Scheduling**: Set intervals between posts for a timed rollout.
-- **Environment Configuration**: Easily configure API credentials and archive locations.
-
+**Script details**:
+* Authentication details, and script options are stored in a `.env.local` file. Scipt option include archive data path and posting interval.
+* If the Tweet image is available, the script will upload the file to Bluesky and attach image metadata to the request. 
+* Currently, the script runs on a set schedule (defaults to posting every 10 minutes). 
 
 ## Installation
 
