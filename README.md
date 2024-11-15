@@ -6,7 +6,7 @@ A script to publish a Twitter archive to Bluesky.
 
 As a developer, I am no longer interested in working with the Twitter/X API. That's saying a lot from someone who was on the Twitter developer relations team for 8 years (and built with Twitter data for 10). 
 
-There are plenty of reason to move from X, including the pay-to-verify joke, the removal of the trust-and-safety team, and the recent change in Block behavior. As a developer, the $100/month for hobbyist levels of data access is laughable. 
+There are plenty of reason to move from X, including the paying for verification, the removal of the trust-and-safety team, and the recent change in Block behavior. For developers, the $100/month for hobbyist levels of data access can be hard to justify. 
 
 So, this project started as an exercise to start learning the Bluesky API and the underlying AT Protocol. From the start, I loved the underlying concepts and design for a distributed network. A place where the entire ecosystem can not be bought by someone who wants to take it in a direction you do not support. 
 
