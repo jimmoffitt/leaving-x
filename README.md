@@ -16,9 +16,7 @@ So if you want to port your Twitter archive to somewhere else, I highly encourag
 
 If you are a Python developer, and want to manage the process yourself, you are in the right place ;) 
 
-
-
-The `BlueskyPoster` class provides a tool for posting Twitter archive content to Bluesky, enabling seamless transition of posts from Twitter (X) to Bluesky’s platform. The tool allows for uploading images, scheduling posts, and managing authentication with Bluesky's API.
+The `leaving_x.py` script provides a tool for posting Twitter archive content to Bluesky, enabling seamless transition of posts from Twitter (X) to Bluesky’s platform. The tool allows for uploading images, scheduling posts, and managing authentication with Bluesky's API.
 
 ## Table of Contents
 
@@ -31,7 +29,12 @@ The `BlueskyPoster` class provides a tool for posting Twitter archive content to
 
 ## Overview
 
-This script reads from a downloaded Twitter archive, then posts the content to Bluesky using its API. You can manage authentication, configure posting intervals, and handle various media types, making it an efficient way to migrate posts to Bluesky.
+The `leaving_x.py` script reads from a downloaded Twitter archive, then posts the content to Bluesky using its API. You can manage authentication, configure posting intervals, and handle various media types, making it an efficient way to migrate posts to Bluesky.
+
+The `leaving_x.py` depends on two classes:
+* TweetArchiveParser: Parses Twitter archive data.
+* BlueskyPoster: Posts content to Bluesky.
+
 
 ## Features
 
@@ -92,6 +95,24 @@ After setting up your `.env.local` file with these values, the script will be ab
 ## Usage
 
 
+
+### 
+
+## External Libraries
+* tweet_archive_parser: Parses Twitter archive data.
+* bluesky_poster: Posts content to Bluesky.
+* asyncio: Asynchronous programming.
+* aiohttp: Asynchronous HTTP requests.
+* datetime: Date and time manipulation.
+* pathlib: File path manipulation.
+* os: Operating system interactions.
+* dotenv: Environment variable loading.
+
+## Main Functions
+* main: The main function that orchestrates the script's logic. Loads the Tweet archive into a list/array. 
+* create_post: Creates a post on Bluesky.
+* load_last_processed_timestamp: Loads the last processed timestamp from a file.
+* save_last_processed_timestamp: Saves the last processed timestamp to a file.
 
 # Notes and todos
 
