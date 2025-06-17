@@ -4,6 +4,12 @@ import requests
 from typing import List, Dict
 
 def parse_mentions(text: str) -> List[Dict]:
+    """
+    Extracts and returns a list of mentions from the input text, including their positions and handles.
+    """
+    """
+    Parses mentions from a given text and returns a list of dictionaries with their positions and handles.
+    """
     spans = []
     mention_regex = rb"[$|\W](@([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)"
     text_bytes = text.encode("UTF-8")
@@ -16,6 +22,9 @@ def parse_mentions(text: str) -> List[Dict]:
     return spans
 
 def parse_urls(text: str) -> List[Dict]:
+    """
+    Extracts and returns a list of URLs from the input text, including their positions.
+    """
     spans = []
     url_regex = rb"[$|\W](https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@%_\+~#//=])?)"
     text_bytes = text.encode("UTF-8")
@@ -28,6 +37,9 @@ def parse_urls(text: str) -> List[Dict]:
     return spans
 
 def parse_tags(text: str) -> List[Dict]:
+    """
+    Extracts and returns a list of tags from the input text, including their positions.
+    """
     spans = []
     tag_regex = rb"[$|\W](#([a-zA-Z0-9_]+))"
     text_bytes = text.encode("UTF-8")
@@ -40,6 +52,9 @@ def parse_tags(text: str) -> List[Dict]:
     return spans
 
 def parse_facets(text: str, pds_url: str) -> List[Dict]:
+    """
+    Parses text to extract mentions, URLs, and tags, resolving handles to DIDs, and returns a list of facets with their positions and features.
+    """
     facets = []
     for mention in parse_mentions(text):
         resp = requests.get(
