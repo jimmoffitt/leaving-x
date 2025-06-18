@@ -1,0 +1,91 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        // --- Configurations for leaving_x.py ---
+        {
+            "name": "Run Poster: Dry Run from Last Post",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "leaving_x.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--dry-run"
+            ],
+            "justMyCode": true
+        },
+        {
+            "name": "Run Poster: Dry Run Reprocess Videos",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "leaving_x.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--reprocess-videos",
+                "--dry-run"
+            ],
+            "justMyCode": true
+        },
+        {
+            "name": "Run Poster: Dry Run from Specific Time",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "leaving_x.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--start-from", "2024-01-01 10:00:00", // <-- CHANGE THIS VALUE
+                "--timezone", "local",
+                "--dry-run"
+            ],
+            "justMyCode": true
+        },
+        {
+            "name": "Run Poster: LIVE RUN from Last Post",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "leaving_x.py",
+            "console": "integratedTerminal",
+            "args": [], // No arguments means it will run normally
+            "justMyCode": true
+        },
+        {
+            "name": "Run Poster: LIVE RUN Reprocess Videos",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "leaving_x.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--reprocess-videos"
+            ],
+            "justMyCode": true
+        },
+        // --- NEW Configurations for delete_posts.py ---
+        {
+            "name": "Run Deleter: Dry Run",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "delete_posts.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--start-time", "2025-06-17 00:00:00", // <-- CHANGE THIS VALUE
+                "--end-time", "2025-06-17 23:59:59",   // <-- CHANGE THIS VALUE
+                "--dry-run"
+            ],
+            "justMyCode": true
+        },
+        {
+            "name": "Run Deleter: LIVE RUN",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "delete_posts.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--start-time", "2025-06-17 00:00:00", // <-- CHANGE THIS VALUE
+                "--end-time", "2025-06-17 23:59:59"    // <-- CHANGE THIS VALUE
+            ],
+            "justMyCode": true
+        }
+    ]
+}
