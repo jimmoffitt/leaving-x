@@ -1,12 +1,13 @@
 from bluesky_facets import parse_facets
+from bluesky_video import BlueskyVideo
 from tweet_archive_parser import TweetArchiveParser
-import requests
 import os
 import sys
 import re
 import json
 from typing import Dict, List
 from pathlib import Path
+import mimetypes
 import asyncio
 import aiohttp
 from datetime import datetime, timezone
@@ -14,7 +15,25 @@ from datetime import timedelta
 from dotenv import load_dotenv
 
 class BlueskyPoster:
+    """
+        A class to handle posting and managing sessions with a Bluesky server.
+    
+        This class provides methods to authenticate, upload images, manage message lengths, and create posts on a Bluesky server.
+    
+        Attributes:
+            pds_url (str): The URL of the Bluesky server.
+            handle (str): The user handle for authentication.
+            password (str): The password for authentication.
+            access_jwt (str): The access token for the session.
+            did (str): The decentralized identifier for the session.
+            session_lock (asyncio.Lock): A lock to manage session creation.
+            session (dict): The current session information.
+            session_expiry (datetime): The expiry time of the current session.
+        """
     def __init__(self, pds_url, handle, password):
+        """
+        Initializes the instance with server URL, user handle, and password, and sets up session management attributes.
+        """
         self.pds_url = pds_url
         self.handle = handle
         self.password = password
@@ -23,8 +42,22 @@ class BlueskyPoster:
         self.session_lock = asyncio.Lock()
         self.session = None
         self.session_expiry = None
+
+        # Initialize the new video uploader class
+        self.video_uploader = BlueskyVideo(pds_url, handle, password)
     
-    async def bsky_login_session(self, pds_url: str, handle: str, password: str) -> Dict:  # Make bsky_login_session async
+    async def bsky_login_session(self, pds_url: str, handle: str, password: str) -> Dict:
+        """
+            Initiates an asynchronous login session with a Bluesky server.
+        
+            Args:
+                pds_url: The URL of the Bluesky server.
+                handle: The user handle for login.
+                password: The password for login.
+        
+            Returns:
+                A dictionary containing the session data if successful, or None if an error occurs.
+            """  # Make bsky_login_session async
 
         headers = {'Content-Type': 'application/json'}
 
@@ -44,7 +77,10 @@ class BlueskyPoster:
             print(f"An unexpected error occurred: {e}")
             return None
 
-    async def get_or_create_session(self):  # No config argument needed here
+    async def get_or_create_session(self):
+        """
+        Manages the session lifecycle, creating a new session if none exists or if the current session has expired.
+        """  # No config argument needed here
         async with self.session_lock:
             if self.session is None or (self.session_expiry and datetime.now(timezone.utc) > self.session_expiry):
                 self.session = await self.bsky_login_session(self.pds_url, self.handle, self.password)  # Use instance attributes
@@ -63,34 +99,72 @@ class BlueskyPoster:
 
             return self.session
 
-    async def upload_image(self, config, image_path):
+    async def upload_video(self, config, media_filename):
+        """
+        Delegates video upload and MANUALLY constructs a clean blob dictionary
+        to ensure API compatibility.
+        """
+        media_path = f"{config['media_folder']}/{media_filename}"
+        
+        # This returns the atproto library's Pydantic model instance
+        video_blob_model = await self.video_uploader.upload(media_path)
+
+        if video_blob_model:
+            # Manually build the dictionary to match the Bluesky API lexicon ---
+            # Do NOT use model_dump(), as it includes extra internal fields.
+            clean_blob_dict = {
+                '$type': 'blob',
+                'ref': {
+                    '$link': str(video_blob_model.ref.link) # Use the CID string from the ref
+                },
+                'mimeType': video_blob_model.mime_type, # Use camelCase for JSON
+                'size': video_blob_model.size
+            }
+            return clean_blob_dict
+            
+        return None
+
+    async def upload_image(self, config, media_filename):
         """
         Uploads an image to a Bluesky server using com.atproto.repo.uploadBlob.
+        
+        Args:
+        config: Configuration dictionary containing server details.
+        media_path: Path to the image file to be uploaded.
+        
+        Returns:
+        The blob identifier if the upload is successful, or None if an error occurs.
         """
 
-        image_path = f"{config['images_folder']}/{image_path}"
+        media_path = f"{config['media_folder']}/{media_filename}"
 
-        if not os.path.exists(image_path):
-            print(f"File does not exist: {image_path}")
+        if not os.path.exists(media_path):
+            print(f"File does not exist: {media_path}")
             return None
+        
+        mime_type, _ = mimetypes.guess_type(media_path)
+        if not mime_type or not mime_type.startswith('image/'):
+            print(f"Could not determine image mime type for {media_filename}. Defaulting to image/jpeg.")
+            mime_type = 'image/jpeg' # Fallback for safety
 
         try:
-            with open(image_path, "rb") as image_file:
-                img_bytes = image_file.read()
+            with open(media_path, "rb") as media_file:
+                media_bytes = media_file.read()
 
-            if len(img_bytes) > 1000000:
+            if len(media_bytes) > 1000000:
                 raise Exception(
-                    f"image file size too large. 1000000 bytes maximum, got: {len(img_bytes)}"
+                    f"Image file size too large. 1000000 bytes maximum, got: {len(media_bytes)}"
                 )
 
             async with aiohttp.ClientSession() as session:
                 resp = await session.post(
+                    # TODO: what is the recipe for uploading videos to Bluesky?
                     config['pds_url'] + "/xrpc/com.atproto.repo.uploadBlob",
                     headers={
-                        "Content-Type": "image/png",
+                        "Content-Type": mime_type,
                         "Authorization": "Bearer " + self.access_jwt
                     },
-                    data=img_bytes,
+                    data=media_bytes,
                 )
                 resp.raise_for_status()
                 blob = (await resp.json())["blob"] 
@@ -101,19 +175,6 @@ class BlueskyPoster:
             print(f"Error uploading image: {e}")
             return None
 
-    async def upload_file(self, pds_url: str, access_token: str, filename: str, file_data: bytes) -> Dict:
-        headers = {"Authorization": f"Bearer {access_token}"}
-        url = f"{pds_url}/xrpc/com.atproto.repo.uploadBlob"
-        
-        async with aiohttp.ClientSession() as session:
-            async with aiohttp.MultipartWriter('form-data') as mpwriter:
-                part = mpwriter.append(file_data, {'Content-Type': 'image/jpeg'})
-                part.set_content_disposition('form-data', name='file', filename=filename)
-
-            resp = await session.post(url, headers=headers, data=mpwriter)
-            resp.raise_for_status()
-            return await resp.json()
-  
     def manage_bluesky_message_length(self, tweet):
         """
         Manages the length of a Bluesky message to keep it under 300 characters.
@@ -137,8 +198,18 @@ class BlueskyPoster:
             return tweet['text'] + long_addendum
         else:
             return tweet['text'] + short_addendum
-    
+
     async def create_post(self, config, tweet):
+        """
+        Creates a new post on the Bluesky platform using the provided tweet data and configuration.
+        
+            Args:
+            config: Configuration dictionary containing necessary session and API details.
+            tweet: A dictionary representing the tweet data to be posted.
+        
+            Returns:
+            None
+        """
         bsky_session = await self.get_or_create_session()
         if bsky_session is None:
             return
@@ -164,38 +235,81 @@ class BlueskyPoster:
             "facets": facets,
         }
 
-        if tweet['image_paths']:
-            image_embed = {  # Initialize the embed dictionary outside the loop
-                # TODO: make general with pds_url
+        # --- REVISED EMBED LOGIC ---
+        embed = None # Initialize embed variable
+
+        # Check for different embed types. Using if/elif is safer.
+        if tweet.get('media_filenames') and tweet['media_type'] in ['video', 'gif']:
+            print('Attempting to embed a video/gif.')
+            blob = await self.upload_video(config, tweet['media_filenames'][0])
+            if blob:
+                embed = {
+                    "$type": "app.bsky.embed.video",
+                    "video": blob,
+                }
+
+        elif tweet.get('media_filenames') and tweet['media_type'] in ['photo']:
+            image_embed = {
                 "$type": "app.bsky.embed.images",
                 "images": []
             }
-            for image_path in tweet['image_paths']:
-                blob = await self.upload_image(config, image_path)
+            for media_filename in tweet['media_filenames']:
+                blob = await self.upload_image(config, media_filename)
                 if blob:
-                    image_setting = {
-                        "alt": '',
-                        "image": blob
-                    }
-                    image_embed["images"].append(image_setting)  # Append each image to the "images" list
+                    image_setting = {"alt": '', "image": blob}
+                    image_embed["images"].append(image_setting)
+            
+            if image_embed["images"]:
+                embed = image_embed
 
-            post["embed"] = image_embed  # Assign the embed after processing all images
+        # TODO: test
+        # --- NEWLY ADDED QUOTE TWEET LOGIC ---
+        elif tweet.get('quoted_post_uri') and tweet.get('quoted_post_cid'):
+            print("Embedding a quote tweet.")
+            embed = {
+                "$type": "app.bsky.embed.record",
+                "record": {
+                    "cid": tweet['quoted_post_cid'],
+                    "uri": tweet['quoted_post_uri']
+                }
+            }
 
-        async with aiohttp.ClientSession() as session:  # Create aiohttp ClientSession here
-            resp = await session.post(  # Use await for async post
-                config['pds_url'] + "/xrpc/com.atproto.repo.createRecord",
-                headers={"Authorization": "Bearer " + self.access_jwt},
-                json={
-                    "repo": self.did,
-                    "collection": "app.bsky.feed.post",
-                    "record": post,
-                },
-            )
-            print("createRecord response:", file=sys.stderr)
-            print(json.dumps(await resp.json(), indent=2))  # Use await for async json response
-            resp.raise_for_status()
+        # If any embed was created, add it to the post
+        if embed:
+            post["embed"] = embed
+
+        print("Final post object being sent:")
+        print(json.dumps(post, indent=2), file=sys.stderr)
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                resp = await session.post(
+                    config['pds_url'] + "/xrpc/com.atproto.repo.createRecord",
+                    headers={"Authorization": "Bearer " + self.access_jwt},
+                    json={
+                        "repo": self.did,
+                        "collection": "app.bsky.feed.post",
+                        "record": post,
+                    },
+                )
+                print("createRecord response:", file=sys.stderr)
+                resp.raise_for_status() # Check for HTTP errors
+                
+                response_json = await resp.json()
+                print(json.dumps(response_json, indent=2))
+                
+                # --- CRITICAL CHANGE: RETURN THE RESPONSE ---
+                return response_json
+        except aiohttp.ClientError as e:
+            print(f"Error creating record: {e}")
+            return None
+
         
+
 async def main():
+    """
+    Asynchronously loads environment variables, initializes configurations, and posts a tweet using BlueskyPoster.
+    """
 
     # Get the directory of the current script
     script_dir = Path(__file__).parent 
@@ -214,7 +328,7 @@ async def main():
     config['handle'] = BLUESKY_HANDLE
     config['password'] = BLUESKY_PASSWORD
     config['pds_url'] = BLUESKY_PDS_URL
-    config['images_folder'] = str(script_dir / TWITTER_DATA_ROOT_FOLDER / 'tweets_media')
+    config['media_folder'] = str(script_dir / TWITTER_DATA_ROOT_FOLDER / 'tweets_media')
     config['tweet_objects_file'] = str(script_dir / TWITTER_DATA_ROOT_FOLDER / 'tweets.js')
         
     if not (config['handle'] and config['password']):
@@ -240,7 +354,10 @@ async def main():
     #tweet = tweets[188]
     # tweet_id = '1662845607046795264' OK
     # tweet_id = '1217911688827211777' OK
-    tweet_id = '928009601601167366'
+    # tweet_id = '928009601601167366'
+    tweet_id = '985872580350390279' #Video post
+    # tweet_id = '981638312241725440' #quotes post 981630390937960448
+    # tweet_id = '902302003812065281' #self-quotes post 902301386880286721
 
     async with aiohttp.ClientSession() as session:
         tasks = []
