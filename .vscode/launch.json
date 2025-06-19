@@ -69,8 +69,9 @@
             "program": "delete_posts.py",
             "console": "integratedTerminal",
             "args": [
-                "--start-time", "2025-06-17 00:00:00", // <-- CHANGE THIS VALUE
-                "--end-time", "2025-06-17 23:59:59",   // <-- CHANGE THIS VALUE
+                "--start-time", "2025-01-01 00:00:00", // <-- CHANGE THIS VALUE
+                "--end-time", "2025-06-17 23:59:59",    // <-- CHANGE THIS VALUE
+                "--match-string", "Tweeted at ", // <-- CHANGE THIS VALUE
                 "--dry-run"
             ],
             "justMyCode": true
@@ -82,8 +83,9 @@
             "program": "delete_posts.py",
             "console": "integratedTerminal",
             "args": [
-                "--start-time", "2025-06-17 00:00:00", // <-- CHANGE THIS VALUE
-                "--end-time", "2025-06-17 23:59:59"    // <-- CHANGE THIS VALUE
+                "--start-time", "2024-11-01 00:00:00", // <-- CHANGE THIS VALUE
+                "--end-time", "2024-12-01 00:00:00",    // <-- CHANGE THIS VALUE
+                "--match-string", "Tweeted at " // <-- CHANGE THIS VALUE
             ],
             "justMyCode": true
         }

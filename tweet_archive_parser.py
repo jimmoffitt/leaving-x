@@ -6,11 +6,23 @@ import os
 from dotenv import load_dotenv
 
 class TweetArchiveParser:
+    """
+    A class to parse and analyze a Twitter archive.
+    
+    Attributes:
+    archive_path (str): The path to the Twitter archive file.
+    """
     def __init__(self, archive_path):
+        """
+        Initializes the instance with the specified archive path.
+        """
         self.archive_path = archive_path
         #self.tweets = []
      
     def load_twitter_archive(self, tweet_objects_path = None):
+        """
+        Loads and parses a Twitter archive from a specified file path, extracting tweet data.
+        """
         
         tweets_raw = []
         tweets = []
@@ -60,6 +72,23 @@ class TweetArchiveParser:
         dt_object = datetime.strptime(timestamp_str, '%a %b %d %H:%M:%S %z %Y')
         return dt_object.strftime('%Y-%m-%d %H:%M:%S')
 
+    def filter_out_quotes(self, tweets):
+
+        not_quote_tweets = []
+
+        for tweet in tweets:
+            pass
+            # Check if tweet is a quote (signature?)
+            is_quote = any(key.startswith("????") for key in tweet)
+        
+            if not is_quote:
+                not_quote_tweets.append(tweet)
+                print(f"Adding Tweet: {tweet['full_text']} ") 
+            else:
+                print(f"Tweet skipped as Quote: {tweet['full_text']} ")    
+
+        return not_quote_tweets
+
     def filter_out_replies(self, tweets):
         """
         Filters out reply tweets from a list of tweet objects.
@@ -93,15 +122,24 @@ class TweetArchiveParser:
         return not_reply_tweets
     
     def extract_metadata(self, tweets):
-        parsed_tweets = []
+        """
+        Extracts and formats metadata from a list of tweets, including timestamps, IDs, text, and media information.
 
-        
+        Args:
+            tweets: A list of tweet objects.
+
+        For media, there can be up to four images or one video.     
+
+        """
+        parsed_tweets = []
+                
         # Already sorted.     
         #tweets.sort(key=lambda tweet: datetime.strptime(tweet["created_at"], "%a %b %d %H:%M:%S +0000 %Y")) 
         
         for tweet in tweets:
             timestamp = self.reformat_timestamp(tweet.get('created_at'))
             tweet_id = tweet.get('id', None)
+            media_type = ''
 
             # Establishing `message` as the Tweet text contents. 
             message = tweet.get('full_text', '')
@@ -111,20 +149,54 @@ class TweetArchiveParser:
             mentions = tweet.get('entities', {}).get('user_mentions', [])
             urls = tweet.get('entities', {}).get('urls', [])
 
-            image_paths = []
+            # Handle media details.
+            media_filenames = [] # There may be multiple images (but never more than one video). 
 
-            # Assemble file names for any images. 
-            # TODO: IIRC, this means more than one image. 
-            # Note: there is always an `extended_entities` object if there is at least one image. 
+            # Assemble file names for images and videos. 
+            # Note: there is always an `extended_entities` object if there is at least one media object. 
             if 'extended_entities' in tweet:
-                # This tweet has images or other media attached.
+                # This tweet has images or a video attached.
+
+                # Grab the `media` object,
                 media_obj = tweet.get('extended_entities', {}).get('media', [])
+
+                # If there is a `tyoe` attribute, grab its value.
                 for item in media_obj:
-                    image_paths.append(f"{tweet_id}-{item['media_url'].split('/')[-1]}")
-            else:
-                # This tweet has no media attached.
-                pass  # No need for extra logic here
+                    if 'type' in item:
+                        media_type = item['type']
+
+                if media_type == 'photo':
+                    print('Got at least one photo, assembling their paths' )
+                    media_filenames.append(f"{tweet_id}-{item['media_url'].split('/')[-1]}")
+
+                # Handle both videos and animated GIFs, as Twitter processes them similarly.
+                if media_type == 'video' or media_type == 'animated_gif':
+                    print(f'Got a {media_type} for tweet {tweet_id}, finding the best quality variant')
+                    
+                    best_variant = None
+                    highest_bitrate = -1
+
+                    # Check for the existence of 'video_info' and 'variants'
+                    if 'video_info' in item and 'variants' in item['video_info']:
+                        for variant in item['video_info']['variants']:
+                            # We only want mp4 files that have a bitrate specified.
+                            # Other variants can be streaming manifests (m3u8).
+                            if variant.get('content_type') == 'video/mp4' and 'bitrate' in variant:
+                                current_bitrate = int(variant['bitrate'])
+                                if current_bitrate > highest_bitrate:
+                                    highest_bitrate = current_bitrate
+                                    best_variant = variant
+                    
+                    if best_variant:
+                        media_url = best_variant['url']
+                        # Clean the URL to get a clean filename
+                        media_tag = media_url.split('/')[-1].split('?')[0]
+                        media_filenames.append(f"{tweet_id}-{media_tag}")
+                    else:
+                        # This message will appear if a video/gif has no valid mp4 variants
+                        print(f"Warning: Could not find a suitable MP4 variant for tweet {tweet_id}")
         
+            # Pack up anything that will be needed later, such as when posting to Bluesky    
             parsed_tweets.append({
                 #"timestamp": self.reformat_timestamp(tweet.get('created_at')),
                 "timestamp": timestamp,
@@ -132,7 +204,8 @@ class TweetArchiveParser:
                 #TODO: document the text/message boundaries.
                 "text": message,
                 "truncated": truncated,
-                "image_paths": image_paths,
+                "media_type": media_type,
+                "media_filenames": media_filenames,
                 "hashtags": [h.get('text') for h in hashtags],
                 "mentions": [m.get('screen_name') for m in mentions],
                 "urls": [u.get('expanded_url') for u in urls],
@@ -141,6 +214,15 @@ class TweetArchiveParser:
         return parsed_tweets
 
     def get_stats(self, tweets):
+        """
+        Analyzes a list of tweets to generate statistical data, including tweet counts, average tweet length, and usage of replies, hashtags, and mentions.
+        
+        Args:
+            tweets: A list of tweet objects to analyze.
+        
+        Returns:
+            A dictionary containing various statistics about the tweets.
+        """
 
         # TODO: expand
         """ 
@@ -204,6 +286,9 @@ class TweetArchiveParser:
         return stats
     
 def main():
+    """
+    Initializes environment, loads and processes Twitter archive, and outputs tweet metadata to a JSON file.
+    """
 
     # TODO: Create instance of TweetParser and load the archive....
 
@@ -213,7 +298,6 @@ def main():
     env_path = script_dir / '.env.local'
     load_dotenv(dotenv_path=env_path)
 
-    IMAGES_FOLDER = os.getenv("IMAGES_FOLDER")
     TWITTER_DATA_ROOT_FOLDER = os.getenv("TWITTER_DATA_ROOT_FOLDER")
 
     # TODO: migrate this script to leaving_twitter home. 
