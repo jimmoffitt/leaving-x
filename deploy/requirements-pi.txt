@@ -1,0 +1,7 @@
+# Just what the scripts import (requirements.txt is a full freeze from the Mac's Python 3.9 venv).
+# atproto matches the version the postcards app already runs on the Pi's Python 3.13.
+aiohttp
+atproto==0.0.72
+python-dateutil
+python-dotenv
+requests

@@ -1,0 +1,15 @@
+[Unit]
+Description=Repost "On this day" Tweets to Bluesky
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=jim
+WorkingDirectory=/home/jim/projects/leaving-x
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/jim/projects/leaving-x/.venv/bin/python3 on_this_day.py
+Nice=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=leaving-x-on-this-day

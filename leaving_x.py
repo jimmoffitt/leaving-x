@@ -1,5 +1,6 @@
 from tweet_archive_parser import TweetArchiveParser
 from bluesky_poster import BlueskyPoster
+from posted_records import load_posted_records, save_posted_record
 import asyncio
 import aiohttp
 from datetime import datetime, timezone #, timedelta?
@@ -49,6 +50,11 @@ async def create_post(config, tweet, bluesky_poster, save_timestamp_on_success=T
                 if 'quoted_status' in tweet:
                     del tweet['quoted_status']
 
+        # The "On this day" timer may have posted this Tweet since this run started.
+        if not config.get('allow_reposts') and tweet['tweet_id'] in load_posted_records():
+            print(f"Skipping Tweet {tweet['tweet_id']}, it is already on Bluesky.")
+            return
+
         # 1. Capture the return value from the main post creation call
         final_post_record = await bluesky_poster.create_post(config, tweet)
         
@@ -69,6 +75,11 @@ async def create_post(config, tweet, bluesky_poster, save_timestamp_on_success=T
 
             message += f". URL: {post_url}"
             print(message)
+            save_posted_record(tweet['tweet_id'], {
+                "uri": final_post_record.get('uri'),
+                "cid": final_post_record.get('cid'),
+                "kind": "archive" if config.get('backdate') else "post",
+            })
         else:
             print(f"❌ FAILED: Post creation failed for Tweet from {tweet['timestamp']}.")
 
@@ -97,6 +108,12 @@ async def main():
                        help="Specify the timezone for the --start-from timestamp. Defaults to 'utc'.")
     parser.add_argument('--reprocess-videos', action='store_true',
                        help='Reprocess all video tweets from the beginning.')
+    parser.add_argument('--media-replies', action='store_true',
+                       help='Post only replies that have photos or video (previously skipped as replies).')
+    parser.add_argument('--tweet-ids', type=str,
+                       help='Post only these Tweets (comma-separated Tweet IDs).')
+    parser.add_argument('--backdate', action='store_true',
+                       help="Set each post's createdAt to the original Tweet time.")
     parser.add_argument('--dry-run', action='store_true',
                        help='Simulate the posting process without creating actual posts.\nSets interval to 1 second and does not save last processed time.')
     args = parser.parse_args()
@@ -104,6 +121,10 @@ async def main():
     # --- Argument Validation ---
     if args.reprocess_videos and args.start_from:
         parser.error("--reprocess-videos and --start-from cannot be used together.")
+    if args.media_replies and (args.reprocess_videos or args.start_from):
+        parser.error("--media-replies cannot be used with --reprocess-videos or --start-from.")
+    if args.tweet_ids and (args.media_replies or args.reprocess_videos or args.start_from):
+        parser.error("--tweet-ids cannot be used with --media-replies, --reprocess-videos or --start-from.")
 
     # --- Configuration Loading ---
     script_dir = Path(__file__).parent
@@ -116,7 +137,9 @@ async def main():
         'pds_url': os.getenv("BLUESKY_PDS_URL"),
         'media_folder': str(script_dir / os.getenv("TWITTER_DATA_ROOT_FOLDER") / 'tweets_media'),
         'tweet_objects_file': str(script_dir / os.getenv("TWITTER_DATA_ROOT_FOLDER") / 'tweets.js'),
-        'sleep_interval_seconds': float(os.getenv("SLEEP_INTERVAL_SECONDS", 600.0)) # Default to 10 minutes
+        'sleep_interval_seconds': float(os.getenv("SLEEP_INTERVAL_SECONDS", 600.0)), # Default to 10 minutes
+        'backdate': args.backdate,
+        'allow_reposts': bool(args.tweet_ids or args.reprocess_videos),
     }
 
     if args.dry_run:
@@ -167,6 +190,17 @@ async def main():
         tweets = [t for t in tweets if t.get('media_type') in ['video', 'gif']]
         save_on_post = False  # Do not update the timestamp file in this mode
         print(f"Found {len(tweets)} video tweets to process.")
+    elif args.tweet_ids:
+        wanted = {i.strip() for i in args.tweet_ids.split(',')}
+        print(f"--- Mode: Posting specific Tweets: {', '.join(sorted(wanted))} ---")
+        tweets = [t for t in tweets if t['tweet_id'] in wanted]
+        save_on_post = False  # Do not update the timestamp file in this mode
+        print(f"Found {len(tweets)} of {len(wanted)} requested Tweets.")
+    elif args.media_replies:
+        print("--- Mode: Posting replies with media ---")
+        tweets = [t for t in tweets if t.get('is_reply') and t.get('media_filenames')]
+        save_on_post = False  # Do not update the timestamp file in this mode
+        print(f"Found {len(tweets)} replies with media to process.")
     elif args.start_from:
         try:
             start_dt_naive = datetime.strptime(args.start_from, '%Y-%m-%d %H:%M:%S')
@@ -193,6 +227,12 @@ async def main():
     else:
         # This branch will now also be hit if --start-from isn't used and no save file exists
         print("No saved or specified start time. Processing from the beginning of the archive.")
+
+    # Skip Tweets that are already on Bluesky, so a stopped run can be safely restarted.
+    if not (args.tweet_ids or args.reprocess_videos):
+        posted = load_posted_records()
+        tweets = [t for t in tweets if t['tweet_id'] not in posted]
+        print(f"{len(tweets)} Tweets not yet posted.")
 
     # --- Main Processing Loop ---
     if not tweets:

@@ -162,3 +162,11 @@ cython_debug/
 #.idea/
 /leaving-x
 /twitter_data
+/saved
+.env.local
+
+# Tweet ID -> Bluesky post mapping (local state)
+posted_records.json
+posted_records.json.tmp
+posted_records.json.lock
+/backups

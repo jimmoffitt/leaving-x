@@ -175,29 +175,26 @@ class BlueskyPoster:
             print(f"Error uploading image: {e}")
             return None
 
-    def manage_bluesky_message_length(self, tweet):
+    def manage_bluesky_message_length(self, tweet, prefix=''):
         """
         Manages the length of a Bluesky message to keep it under 300 characters.
 
         Args:
             tweet: A dictionary representing a tweet, containing a 'text' key.
+            prefix: Optional text to put before the Tweet text, such as an "On this day" line.
 
         Returns:
-            A string with the processed tweet and addendum, ready for Bluesky.
+            A string with the processed tweet, ready for Bluesky.
         """
 
         # Remove the URL from the tweet
-        tweet['text'] = re.sub(r"https://t\.co/\S+", "", tweet['text']).strip()
+        text = prefix + re.sub(r"https://t\.co/\S+", "", tweet['text']).strip()
 
-        # Create the long and short versions of the addendum
-        long_addendum = f"\n\nTweeted at {tweet['timestamp']} UTC"
-        short_addendum = f"\nTweeted {tweet['timestamp'].split()[0]}"
+        if len(text) <= 300:
+            return text
 
-        # Check if the long addendum fits within the character limit
-        if len(tweet['text'] + long_addendum) <= 300:
-            return tweet['text'] + long_addendum
-        else:
-            return tweet['text'] + short_addendum
+        # Too long (Bluesky rejects these), so trim the text.
+        return text[:299].rstrip() + '…'
 
     async def create_post(self, config, tweet):
         """
@@ -217,10 +214,13 @@ class BlueskyPoster:
         #config['accessJwt'] = bsky_session["accessJwt"]
         #config['did'] = bsky_session["did"]
 
-        tweet['text' ]= self.manage_bluesky_message_length(tweet)
+        tweet['text'] = self.manage_bluesky_message_length(tweet, tweet.get('post_prefix', ''))
 
         # trailing "Z" is preferred over "+00:00"
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        if config.get('backdate'):
+            # Use the original Tweet time, so the post sorts by its original date on the profile.
+            now = datetime.strptime(tweet['timestamp'], '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%dT%H:%M:%S.000Z')
 
         # Use the parse_facets function to generate facets
         #facets = parse_facets(tweet['text'] + addendum, self.pds_url)
@@ -274,6 +274,11 @@ class BlueskyPoster:
                 }
             }
 
+        # Don't post a Tweet without its photos or video, so it can be retried later.
+        if tweet.get('media_filenames') and not embed:
+            print(f"Media upload failed for Tweet {tweet.get('tweet_id')}, not posting it.")
+            return None
+
         # If any embed was created, add it to the post
         if embed:
             post["embed"] = embed
@@ -305,6 +310,28 @@ class BlueskyPoster:
             return None
 
         
+
+    async def delete_post(self, uri):
+        """
+        Deletes one of our posts, given its at:// URI. Returns True if it was deleted (or was already gone).
+        """
+        bsky_session = await self.get_or_create_session()
+        if bsky_session is None:
+            return False
+
+        rkey = uri.split('/')[-1]
+        try:
+            async with aiohttp.ClientSession() as session:
+                resp = await session.post(
+                    self.pds_url + "/xrpc/com.atproto.repo.deleteRecord",
+                    headers={"Authorization": "Bearer " + self.access_jwt},
+                    json={"repo": self.did, "collection": "app.bsky.feed.post", "rkey": rkey},
+                )
+                resp.raise_for_status()
+                return True
+        except aiohttp.ClientError as e:
+            print(f"Error deleting {uri}: {e}")
+            return False
 
 async def main():
     """

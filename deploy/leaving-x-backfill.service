@@ -1,0 +1,22 @@
+# One-off: posts the whole archive, backdated. Started by hand (not enabled at boot):
+#   sudo systemctl start leaving-x-backfill
+# Safe to restart at any point; Tweets already on Bluesky (per posted_records.json) are skipped.
+[Unit]
+Description=Backfill the Twitter archive to Bluesky (backdated)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jim
+WorkingDirectory=/home/jim/projects/leaving-x
+Environment=PYTHONUNBUFFERED=1
+# One post a minute: ~2,700 posts takes about 2 days. Overrides SLEEP_INTERVAL_SECONDS in .env.local.
+Environment=SLEEP_INTERVAL_SECONDS=60
+ExecStart=/home/jim/projects/leaving-x/.venv/bin/python3 leaving_x.py --backdate --start-from "2000-01-01 00:00:00"
+Nice=10
+Restart=on-failure
+RestartSec=60
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=leaving-x-backfill

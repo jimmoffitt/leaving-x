@@ -1,3 +1,5 @@
+import re
+import html
 import json
 from datetime import datetime, timedelta
 from dateutil import parser
@@ -89,15 +91,16 @@ class TweetArchiveParser:
 
         return not_quote_tweets
 
-    def filter_out_replies(self, tweets):
+    def filter_out_replies(self, tweets, keep_replies_with_media=True):
         """
         Filters out reply tweets from a list of tweet objects.
 
         Args:
         tweets: A list of tweet objects.
+        keep_replies_with_media: If True, replies with photos or video are kept (and posted as standalone posts).
 
         Returns:
-        A new list containing only the tweets that are not replies.
+        A new list containing only the tweets that are not replies (plus replies with media, if requested).
         """
         not_reply_tweets = []
 
@@ -115,12 +118,43 @@ class TweetArchiveParser:
                 if '@' in tweet["full_text"][0:10]:
                     pass
                 not_reply_tweets.append(tweet)
-                print(f"Adding Tweet: {tweet['full_text']} ") 
+                print(f"Adding Tweet: {tweet['full_text']} ")
+            elif keep_replies_with_media and 'extended_entities' in tweet:
+                # The original Tweet being replied to isn't in the archive, so this is posted on its own.
+                tweet['is_reply'] = True
+                not_reply_tweets.append(tweet)
+                print(f"Adding Reply with media: {tweet['full_text']} ")
             else:
                 print(f"Tweet skipped as Reply: {tweet['full_text']} ")    
                 
         return not_reply_tweets
     
+    def add_reply_prefix(self, message):
+        """
+        Replaces a reply's leading @handles with a "Replying to ... on Twitter:" line.
+
+        Falls back to "@first and N others", then to the original text, to stay under Bluesky's
+        300 character limit (allowing for an "On this day in YYYY:" line and the t.co links that get stripped).
+        """
+        leading = re.match(r'^\.?((?:@\w+\s+)+)', message)
+        if not leading:
+            return message
+
+        handles = leading.group(1).split()
+        body = message[leading.end():]
+        budget = 300 - len("On this day in YYYY:\n\n")
+
+        candidates = [', '.join(handles)]
+        if len(handles) > 1:
+            candidates.append(f"{handles[0]} and {len(handles) - 1} other{'s' if len(handles) > 2 else ''}")
+
+        for who in candidates:
+            prefixed = f"Replying to {who} on Twitter:\n\n{body}"
+            if len(re.sub(r"https://t\.co/\S+", "", prefixed).strip()) <= budget:
+                return prefixed
+
+        return message
+
     def extract_metadata(self, tweets):
         """
         Extracts and formats metadata from a list of tweets, including timestamps, IDs, text, and media information.
@@ -142,8 +176,12 @@ class TweetArchiveParser:
             media_type = ''
 
             # Establishing `message` as the Tweet text contents. 
-            message = tweet.get('full_text', '')
+            message = html.unescape(tweet.get('full_text', ''))  # The archive stores '&gt;', '&amp;', etc.
             truncated = tweet.get('truncated', False)
+
+            # For replies, move the leading @handles into a "Replying to" line, since the original Tweet isn't posted.
+            if tweet.get('is_reply') and tweet.get('in_reply_to_status_id_str'):
+                message = self.add_reply_prefix(message)
             
             hashtags = tweet.get('entities', {}).get('hashtags', [])
             mentions = tweet.get('entities', {}).get('user_mentions', [])
@@ -165,9 +203,9 @@ class TweetArchiveParser:
                     if 'type' in item:
                         media_type = item['type']
 
-                if media_type == 'photo':
-                    print('Got at least one photo, assembling their paths' )
-                    media_filenames.append(f"{tweet_id}-{item['media_url'].split('/')[-1]}")
+                    if media_type == 'photo':
+                        print('Got a photo, assembling its path' )
+                        media_filenames.append(f"{tweet_id}-{item['media_url'].split('/')[-1]}")
 
                 # Handle both videos and animated GIFs, as Twitter processes them similarly.
                 if media_type == 'video' or media_type == 'animated_gif':
@@ -192,6 +230,9 @@ class TweetArchiveParser:
                         # Clean the URL to get a clean filename
                         media_tag = media_url.split('/')[-1].split('?')[0]
                         media_filenames.append(f"{tweet_id}-{media_tag}")
+                        # BlueskyPoster expects 'gif', not Twitter's 'animated_gif'.
+                        if media_type == 'animated_gif':
+                            media_type = 'gif'
                     else:
                         # This message will appear if a video/gif has no valid mp4 variants
                         print(f"Warning: Could not find a suitable MP4 variant for tweet {tweet_id}")
@@ -204,6 +245,7 @@ class TweetArchiveParser:
                 #TODO: document the text/message boundaries.
                 "text": message,
                 "truncated": truncated,
+                "is_reply": tweet.get('is_reply', False),
                 "media_type": media_type,
                 "media_filenames": media_filenames,
                 "hashtags": [h.get('text') for h in hashtags],
