@@ -66,8 +66,8 @@ run git -C "$ROOT" push "$DEPLOY_HOST:$DEPLOY_DIR" HEAD:main
 
 echo
 echo "== 3. Config and Twitter archive"
-"${RSYNC[@]}" --chmod=F600 "$ROOT/.env.local" "$DEPLOY_HOST:$DEPLOY_DIR/.env.local"
-run ssh "$DEPLOY_HOST" "mkdir -p '$DEPLOY_DIR/twitter_data'"
+"${RSYNC[@]}" "$ROOT/.env.local" "$DEPLOY_HOST:$DEPLOY_DIR/.env.local"
+run ssh "$DEPLOY_HOST" "chmod 600 '$DEPLOY_DIR/.env.local' && mkdir -p '$DEPLOY_DIR/twitter_data'"
 "${RSYNC[@]}" --exclude='.DS_Store' "$ROOT/twitter_data/tweets.js" "$ROOT/twitter_data/tweets_media" "$DEPLOY_HOST:$DEPLOY_DIR/twitter_data/"
 
 if (( INSTALL )); then
