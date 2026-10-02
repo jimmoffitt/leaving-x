@@ -17,7 +17,7 @@ def load_last_processed_timestamp():
     try:
         with open(LAST_PROCESSED_TIMESTAMP_FILE, "r") as f:
             timestamp_str = f.read().strip()
-            return datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+            return datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
     except FileNotFoundError:
         return None
 
@@ -222,7 +222,7 @@ async def main():
 
     if last_processed_timestamp:
         print(f"Filtering tweets after: {last_processed_timestamp}")
-        tweets = [t for t in tweets if datetime.strptime(t['timestamp'], '%Y-%m-%d %H:%M:%S') > last_processed_timestamp]
+        tweets = [t for t in tweets if datetime.strptime(t['timestamp'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc) > last_processed_timestamp]
         print(f"Found {len(tweets)} new tweets to process.")
     else:
         # This branch will now also be hit if --start-from isn't used and no save file exists
