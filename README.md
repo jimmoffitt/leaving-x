@@ -1,6 +1,16 @@
 # leaving-x
-Python code for publishing Twitter archives to Bluesky.
+This project provides a set of Python scripts to read a downloaded Twitter archive and publish its content—including text, photos, videos, and quote tweets—to the Bluesky social network. It also includes utility scripts for managing and cleaning up the posts on Bluesky.
 
+The main script is designed to run periodically, posting old tweets chronologically and keeping track of its progress so it can resume where it left off.
+
+## Features
+
+* **Chronological Posting**: Posts tweets from your archive in the order they were originally created.
+* **Media Support**: Automatically uploads and attaches photos, GIFs, and videos to your posts.
+* **Quote Tweet Handling**: Re-creates quote tweets by first posting the quoted tweet, then embedding it in the main post.
+* **Intelligent Resumption**: Remembers the last tweet successfully posted and resumes from that point on the next run.
+* **Flexible Control**: Use command-line arguments to start from a specific time, reprocess all videos, or perform a dry run without posting.
+* **Post Management Utilities**: Includes scripts to delete posts from your Bluesky feed based on a timeframe or by searching for specific text within the posts.
 
 ## Introduction
 
@@ -18,123 +28,141 @@ So, if you are a Python developer, and want to manage the process yourself, you 
 
 The `leaving_x.py` script provides a tool for posting Twitter archive content to Bluesky. The sript relies on `tweet_archive_parser.py` code that provides a TwitterArchiveParser class. There is also a `bluesky_poster.py` file that manages Bluesky requests with a BlueskyPoster class.  
 
-### So, tell me more about this tool 
-* Configuration is managed with a `.env.local` file that sets *environment variables*. These include Bluesky authentication details and script options (archive data path and posting interval)
-* This tool knows how to navigate the Twitter archive file structure and parse Tweet JSON objects. These objects have evolved since 2006, and unexpected results are likely due to the code not parsing correctly (or incompletely). 
-* The main mission of this tool is to manage the posting to Bluesky. Currently, it posts on a specified interval (which defaults to every 10 minutes).  Automated Posting: Read and post from a Twitter archive.
-* This tool is designed to manage the posting images. Much of the code here is focused on mapping image file names to Tweet metadata, uploading images to Bluesky, and attaching the images to the Bluesky `createRecord` request. 
+## Setup
 
-## Table of Contents
+### 1. Prerequisites
 
-- [Overview](#overview)
-- [Features](#features)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [License](#license)
+* Python 3.9+
+* A complete downloaded Twitter archive (including the `tweets.js` file and `data/tweets_media` folder).
 
-## Overview
+### 2. Installation
 
-The `leaving_x.py` script reads from a downloaded Twitter archive, and then posts the content to Bluesky using its API. The script manages authentication, posts on a configured interval, and handles various media types.
-
-The `leaving_x.py` depends on two classes:
-* TweetArchiveParser: Parses Twitter archive data.
-* BlueskyPoster: Posts content to Bluesky.
-
-**Script details**:
-* Authentication details, and script options are stored in a `.env.local` file. Scipt option include archive data path and posting interval.
-* If the Tweet image is available, the script will upload the file to Bluesky and attach image metadata to the request. 
-* Currently, the script runs on a set schedule (defaults to posting every 10 minutes). 
-
-## Installation
-
-1. **Clone the repository**
-
-   Clone the repository to your local environment:
-
-   ```bash
-   git clone https://github.com/jimmoffitt/leaving-x.git
-   cd leaving-x
-
-2. **Install requirements
-
-Ensure you have Python 3.7+ installed. Then, install the required libraries:
-
-    ```bash
-    pip install -r requirements.txt
-
-3. Set up Environment Variables
-
-Create a .env.local file in the root directory based on .env.local.example (see the Configuration section for details).
-
-
-## Configuration
-
-Before running the script, you’ll need to create a `.env.local` file in the root directory of your project. This file contains environment variables necessary for Bluesky API authentication and Twitter archive configuration settings. Follow these steps:
-
-1. Copy the example file to create a new .env.local file
-```bash
-cp .env.local.example .env.local
-```
-
-2. Update the `.env.local` file with your specific settings:
+Clone the repository to your local machine:
 
 ```bash
-# Bluesky API authentication details
-BLUESKY_PDS_URL = 'https://bsky.social'
-BLUESKY_HANDLE = '{your_handle}.bsky.social'  # Replace `{your_handle}` with your actual Bluesky handle
-BLUESKY_PASSWORD = 'your_password'            # Replace `your_password` with your Bluesky password
-
-# Directory for Twitter data (ensure `tweets.js` and `tweets_media` folder are here)
-TWITTER_DATA_ROOT_FOLDER = './twitter_data'
-
-# Script configuration
-SLEEP_INTERVAL_SECONDS = 60  # Adjust interval between posts (in seconds)
+git clone https://github.com/jimmoffitt/leaving-x.git
+cd leaving-x
 ```
 
-After setting up your `.env.local` file with these values, the script will be able to read the environment variables needed for authentication and data handling.
+Install the required Python packages:
+
+```bash
+pip install -r requirements.txt
+```
+
+*(You will need to create a `requirements.txt` file in your project directory with the following content):*
+
+```
+aiohttp==3.11.10
+atproto==0.0.56
+debugpy==1.8.14
+httpx==0.28.1
+python-dotenv==1.0.1
+PyYAML==6.0.2
+requests==2.32.3
+```
+
+### 3. Configuration
+
+The scripts are configured using a `.env.local` file.
+
+1.  **Create the file**: In the root of the project, create a file named `.env.local`.
+2.  **Add your credentials**: Copy the example below into the file and replace the placeholder values with your own information.
+
+**.env.local Example:**
+
+```env
+# Your Bluesky account handle (e.g., your-name.bsky.social)
+BLUESKY_HANDLE="your-handle.bsky.social"
+
+# An app-specific password created in Bluesky settings
+BLUESKY_PASSWORD="xxxx-xxxx-xxxx-xxxx"
+
+# The PDS URL for Bluesky (usually does not need to be changed)
+BLUESKY_PDS_URL="[https://bsky.social](https://bsky.social)"
+
+# The name of your Twitter data folder
+TWITTER_DATA_ROOT_FOLDER="twitter_data"
+
+# The time to wait between posts, in seconds (e.g., 600 = 10 minutes)
+SLEEP_INTERVAL_SECONDS=600
+```
+
+### 4. Twitter Archive
+
+Place your unzipped Twitter archive folder into the project directory. The folder name should match the `TWITTER_DATA_ROOT_FOLDER` value in your `.env.local` file. The script expects the following structure:
+
+```
+leaving-x/
+|-- twitter_data/
+|   |-- tweets.js
+|   +-- data/
+|       +-- tweets_media/
+|           +-- ... (your image and video files)
+|-- leaving_x.py
+|-- bluesky_facets.py
+|-- bluesky_poster.py
+|-- bluesky_video.py
+|-- tweet_archive_parser.py
+|-- delete_posts.py
++-- .env.local
+```
+
+---
 
 ## Usage
 
+### Posting Tweets (`leaving_x.py`)
 
+This is the main script for publishing your archive.
 
-## More details 
+* **Run normally (resumes from last post)**:
+    ```bash
+    python leaving_x.py
+    ```
+* **Perform a dry run to see what would be posted**:
+    ```bash
+    python leaving_x.py --dry-run
+    ```
+* **Start posting from a specific UTC timestamp**:
+    ```bash
+    python leaving_x.py --start-from "2022-01-15 14:30:00"
+    ```
+* **Start posting from a specific local timestamp**:
+    ```bash
+    python leaving_x.py --start-from "2022-01-15 08:30:00" --timezone local
+    ```
+* **Reprocess and post all video tweets from the archive**:
+    *(This mode does not update the last processed timestamp).*
+    ```bash
+    python leaving_x.py --reprocess-videos
+    ```
 
-### External Libraries
-* tweet_archive_parser: Parses Twitter archive data.
-* bluesky_poster: Posts content to Bluesky.
-* asyncio: Asynchronous programming.
-* aiohttp: Asynchronous HTTP requests.
-* datetime: Date and time manipulation.
-* pathlib: File path manipulation.
-* os: Operating system interactions.
-* dotenv: Environment variable loading.
+### Deleting Posts
 
-### Files Used
-* tweets.js: A file containing tweet data from the Twitter archive.
-* tweets_media/: Folder with media files (images) associated with the * tweets.
-* last_processed_timestamp.txt: Stores the timestamp of the last successfully posted tweet to continue from that point on the next run.
+These scripts help clean up your Bluesky feed. Always use `--dry-run` first to confirm!
 
-[] TODO
-### Main Functions
-* `leaving_x.py` **main**: The main function that orchestrates the script's logic. Loads the Tweet archive into a list/array. 
-* `bluesky_poster.py` **create_post**: Creates a post on Bluesky.
-* `leaving_x.py` **load_last_processed_timestamp**: Loads the last processed timestamp from a file.
-* `leaving_x.py` **save_last_processed_timestamp**: Saves the last processed timestamp to a file.
+* **`delete_posts.py`**: Deletes posts within a specific UTC time window.
+    ```bash
+    python delete_posts.py --start-time "2024-06-15 00:00:00" --end-time "2024-06-18 23:59:59" --dry-run
+    ```
+    You can also add an optional `--match-string` to further filter the posts in that time window.
+    ```bash
+    python delete_posts.py --start-time "2024-06-18 00:00:00" --end-time "2024-06-18 23:59:59" --match-string "Broncos"
+    ```
+* **`delete_by_text.py`**: Deletes all posts containing a specific substring (e.g., the "Tweeted at" footer).
+    ```bash
+    python delete_by_text.py --filter-text "Tweeted at" --dry-run
+    ```
 
-# Notes and todos
+---
 
-The script will:
+## Debugging in VS Code
 
-* Load the last processed tweet's timestamp from last_processed_timestamp.txt.
-* Parse the Twitter archive to load tweets created after the last processed timestamp.
-* Filter out replies and extract metadata for posting.
-* Post each tweet to Bluesky, introducing a delay to avoid rate limits.
-* Update last_processed_timestamp.txt to track progress.
+This project is configured for easy debugging in Visual Studio Code.
 
-
-## Error Handling
-Errors during the posting process are caught and printed. If an error occurs with a specific tweet, it is skipped, and the script continues to the next one.
-
-License
-This project is licensed under the Apache 2.0 License.
+1.  Open the project folder in VS Code.
+2.  Navigate to the **Run and Debug** view (Ctrl+Shift+D).
+3.  A dropdown menu at the top will contain pre-configured launch options for all scripts (e.g., "Run Poster: Dry Run", "Run Deleter: Dry Run").
+4.  Set breakpoints in the code by clicking in the gutter next to the line numbers.
+5.  Select a configuration from the dropdown and press the green "Start Debugging" button (F5).
