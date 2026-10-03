@@ -1,16 +1,19 @@
 # leaving-x
-This project provides a set of Python scripts to read a downloaded Twitter archive and publish its content—including text, photos, videos, and quote tweets—to the Bluesky social network. It also includes utility scripts for managing and cleaning up the posts on Bluesky.
+This project provides a set of Python scripts to read a downloaded Twitter archive and publish its content—including text, photos, GIFs and videos—to the Bluesky social network.
 
-The main script is designed to run periodically, posting old tweets chronologically and keeping track of its progress so it can resume where it left off.
+Posts are **backdated** to when they were originally Tweeted, so they appear in your Bluesky profile in their original order (2008, 2009, ...) without flooding your followers' feeds. A companion script then brings old Tweets back each day as **"On this day"** posts.
+
+This is running at [snowman-ghost.bsky.social](https://bsky.app/profile/snowman-ghost.bsky.social), which hosts the archive of the @snowman Twitter account.
 
 ## Features
 
-* **Chronological Posting**: Posts tweets from your archive in the order they were originally created.
-* **Media Support**: Automatically uploads and attaches photos, GIFs, and videos to your posts.
-* **Quote Tweet Handling**: Re-creates quote tweets by first posting the quoted tweet, then embedding it in the main post.
-* **Intelligent Resumption**: Remembers the last tweet successfully posted and resumes from that point on the next run.
-* **Flexible Control**: Use command-line arguments to start from a specific time, reprocess all videos, or perform a dry run without posting.
-* **Post Management Utilities**: Includes scripts to delete posts from your Bluesky feed based on a timeframe or by searching for specific text within the posts.
+* **Backdated posting**: With `--backdate`, each post's `createdAt` is set to the original Tweet time, so the archive reads chronologically on your profile.
+* **"On this day" reposts**: `on_this_day.py` reposts Tweets from today's date in earlier years, at their original time of day, with an "On this day in YYYY:" line. Once the new post is up, the previous copy (the backdated one, or last year's "On this day" post) is deleted, so each Tweet lives in one place.
+* **Media support**: Uploads and attaches up to four photos per post, plus GIFs and videos. If a media upload fails, the Tweet is skipped (and retried on the next run) rather than posted without its media.
+* **Replies with media**: Replies are normally skipped, since the Tweet being replied to isn't in your archive. Replies with photos or video are kept, with their leading @handles moved into a "Replying to @... on Twitter:" line.
+* **Restart-safe**: Every post is recorded in `posted_records.json` (Tweet ID → Bluesky post). A stopped run can be restarted and only posts what's missing.
+* **Raspberry Pi deployment**: systemd units and a sync script for running everything on a Pi (or any Linux box).
+* **Post management utilities**: `delete_posts.py` deletes posts in a time window, optionally only those containing some text.
 
 ## Introduction
 
@@ -26,14 +29,40 @@ If you are thinking about archiving your Tweet history, this tool is one way to 
 
 So, if you are a Python developer, and want to manage the process yourself, you are in the right place ;) 
 
-The `leaving_x.py` script provides a tool for posting Twitter archive content to Bluesky. The sript relies on `tweet_archive_parser.py` code that provides a TwitterArchiveParser class. There is also a `bluesky_poster.py` file that manages Bluesky requests with a BlueskyPoster class.  
+The `leaving_x.py` script provides a tool for posting Twitter archive content to Bluesky. The sript relies on `tweet_archive_parser.py` code that provides a TwitterArchiveParser class. There is also a `bluesky_poster.py` file that manages Bluesky requests with a BlueskyPoster class.
+
+The `leaving_x.py` script posts Twitter archive content to Bluesky, and `on_this_day.py` handles the daily "On this day" reposts. Both rely on `tweet_archive_parser.py` (the `TweetArchiveParser` class, which reads the archive) and `bluesky_poster.py` (the `BlueskyPoster` class, which manages Bluesky requests).
+
+## What the posts look like
+
+A Tweet's text is posted as-is, minus its `t.co` media links. Mentions of Twitter handles stay plain text, so they don't link to (or notify) anyone on Bluesky.
+
+A reply with a photo:
+
+```
+Replying to @MDCinMT and 7 others on Twitter:
+
+Yes, true. That's my board too. ...
+```
+
+The same Tweet when it comes back as an "On this day" post:
+
+```
+On this day in 2021:
+
+Replying to @MDCinMT and 7 others on Twitter:
+
+Yes, true. That's my board too. ...
+```
+
+Posts are trimmed (with "…") to fit Bluesky's 300-character limit.
 
 ## Setup
 
 ### 1. Prerequisites
 
 * Python 3.9+
-* A complete downloaded Twitter archive (including the `tweets.js` file and `data/tweets_media` folder).
+* A complete downloaded Twitter archive (including the `tweets.js` file and the `tweets_media` folder).
 
 ### 2. Installation
 
@@ -47,29 +76,14 @@ cd leaving-x
 Install the required Python packages:
 
 ```bash
-pip install -r requirements.txt
+pip install -r deploy/requirements-pi.txt
 ```
 
-*(You will need to create a `requirements.txt` file in your project directory with the following content):*
-
-```
-aiohttp==3.11.10
-atproto==0.0.56
-debugpy==1.8.14
-httpx==0.28.1
-python-dotenv==1.0.1
-PyYAML==6.0.2
-requests==2.32.3
-```
+(`deploy/requirements-pi.txt` lists just what the scripts import. `requirements.txt` is a full freeze of the original Python 3.9 development environment.)
 
 ### 3. Configuration
 
-The scripts are configured using a `.env.local` file.
-
-1.  **Create the file**: In the root of the project, create a file named `.env.local`.
-2.  **Add your credentials**: Copy the example below into the file and replace the placeholder values with your own information.
-
-**.env.local Example:**
+The scripts are configured using a `.env.local` file in the root of the project. Copy `example.env.local` and fill in your own values:
 
 ```env
 # Your Bluesky account handle (e.g., your-name.bsky.social)
@@ -79,32 +93,34 @@ BLUESKY_HANDLE="your-handle.bsky.social"
 BLUESKY_PASSWORD="xxxx-xxxx-xxxx-xxxx"
 
 # The PDS URL for Bluesky (usually does not need to be changed)
-BLUESKY_PDS_URL="[https://bsky.social](https://bsky.social)"
+BLUESKY_PDS_URL="https://bsky.social"
 
 # The name of your Twitter data folder
 TWITTER_DATA_ROOT_FOLDER="twitter_data"
 
-# The time to wait between posts, in seconds (e.g., 600 = 10 minutes)
-SLEEP_INTERVAL_SECONDS=600
+# The time to wait between posts, in seconds (e.g., 60 = one post a minute)
+SLEEP_INTERVAL_SECONDS=60
 ```
 
 ### 4. Twitter Archive
 
-Place your unzipped Twitter archive folder into the project directory. The folder name should match the `TWITTER_DATA_ROOT_FOLDER` value in your `.env.local` file. The script expects the following structure:
+Copy `tweets.js` and the `tweets_media` folder from your unzipped Twitter archive's `data` folder into a folder whose name matches `TWITTER_DATA_ROOT_FOLDER`:
 
 ```
 leaving-x/
 |-- twitter_data/
 |   |-- tweets.js
-|   +-- data/
-|       +-- tweets_media/
-|           +-- ... (your image and video files)
+|   +-- tweets_media/
+|       +-- ... (your image and video files)
 |-- leaving_x.py
-|-- bluesky_facets.py
-|-- bluesky_poster.py
-|-- bluesky_video.py
+|-- on_this_day.py
 |-- tweet_archive_parser.py
+|-- bluesky_poster.py
+|-- bluesky_facets.py
+|-- bluesky_video.py
+|-- posted_records.py
 |-- delete_posts.py
+|-- deploy/
 +-- .env.local
 ```
 
@@ -112,48 +128,95 @@ leaving-x/
 
 ## Usage
 
-### Posting Tweets (`leaving_x.py`)
+### Posting the archive (`leaving_x.py`)
 
-This is the main script for publishing your archive.
-
-* **Run normally (resumes from last post)**:
+* **Post the whole archive, backdated** (what you probably want):
     ```bash
-    python leaving_x.py
+    python leaving_x.py --backdate --start-from "2000-01-01 00:00:00"
     ```
 * **Perform a dry run to see what would be posted**:
     ```bash
-    python leaving_x.py --dry-run
+    python leaving_x.py --backdate --dry-run
     ```
-* **Start posting from a specific UTC timestamp**:
+* **Resume from the last post** (the default, using `last_processed_timestamp.txt`):
     ```bash
-    python leaving_x.py --start-from "2022-01-15 14:30:00"
+    python leaving_x.py --backdate
     ```
-* **Start posting from a specific local timestamp**:
+* **Start posting from a specific UTC timestamp** (add `--timezone local` for local time):
     ```bash
-    python leaving_x.py --start-from "2022-01-15 08:30:00" --timezone local
+    python leaving_x.py --backdate --start-from "2022-01-15 14:30:00"
     ```
-* **Reprocess and post all video tweets from the archive**:
-    *(This mode does not update the last processed timestamp).*
+* **Post specific Tweets** (handy for testing):
+    ```bash
+    python leaving_x.py --backdate --tweet-ids 471150776228671488,1377811051723382784
+    ```
+* **Post only replies that have photos or video**:
+    ```bash
+    python leaving_x.py --backdate --media-replies
+    ```
+* **Reprocess and post all video Tweets**:
     ```bash
     python leaving_x.py --reprocess-videos
     ```
 
-### Deleting Posts
+Without `--backdate`, posts are stamped with the current time.
 
-These scripts help clean up your Bluesky feed. Always use `--dry-run` first to confirm!
+Tweets already in `posted_records.json` are skipped (except with `--tweet-ids` and `--reprocess-videos`), so stopping and restarting a run is safe. The `--tweet-ids`, `--media-replies` and `--reprocess-videos` modes don't update `last_processed_timestamp.txt`.
 
-* **`delete_posts.py`**: Deletes posts within a specific UTC time window.
+### "On this day" reposts (`on_this_day.py`)
+
+Run it every few minutes (see the systemd timer below). Each run reposts any of today's Tweets whose original time of day has passed and that haven't been reposted this year. Times are in UTC, so a Tweet comes back at the same local clock time it was first posted (give or take an hour for daylight saving). Feb 29 Tweets come back on Feb 28 in non-leap years.
+
+* **See what's due today, without posting**:
     ```bash
-    python delete_posts.py --start-time "2024-06-15 00:00:00" --end-time "2024-06-18 23:59:59" --dry-run
+    python on_this_day.py --dry-run
     ```
-    You can also add an optional `--match-string` to further filter the posts in that time window.
+* **See what would be posted on another day**:
     ```bash
-    python delete_posts.py --start-time "2024-06-18 00:00:00" --end-time "2024-06-18 23:59:59" --match-string "Broncos"
+    python on_this_day.py --dry-run --date 2026-12-25
     ```
-* **`delete_by_text.py`**: Deletes all posts containing a specific substring (e.g., the "Tweeted at" footer).
-    ```bash
-    python delete_by_text.py --filter-text "Tweeted at" --dry-run
-    ```
+
+### Deleting posts (`delete_posts.py`)
+
+Deletes posts within a UTC time window, optionally only those containing some text. It asks for confirmation before deleting. Always use `--dry-run` first!
+
+```bash
+python delete_posts.py --start-time "2024-06-15 00:00:00" --end-time "2024-06-18 23:59:59" --dry-run
+python delete_posts.py --start-time "2024-06-18 00:00:00" --end-time "2024-06-18 23:59:59" --match-string "Broncos"
+```
+
+Note that the time window applies to each post's `createdAt`, which for backdated posts is the original Tweet time.
+
+---
+
+## Running on a Raspberry Pi
+
+The `deploy/` folder runs this on a Pi (or any Linux box with systemd):
+
+* `leaving-x-on-this-day.timer` / `.service` run `on_this_day.py` every 5 minutes. Each run takes a few seconds and exits, so nothing stays resident.
+* `leaving-x-backfill.service` is a one-off that posts the whole archive, backdated, at one post a minute (~2 days for ~2,700 Tweets). It restarts on failure and is not started at boot.
+* `sync_to_pi.sh` deploys from your Mac:
+    1. Backs up the Pi's `posted_records.json` into `backups/`. The Pi is the source of truth for what's been posted, so this file is never pushed to it.
+    2. Pushes committed code to a git repo on the Pi over ssh (it refuses to run with uncommitted changes).
+    3. Copies `.env.local` and the Twitter archive (only changed files after the first run).
+    4. With `--install`, creates the venv, installs packages, and installs and enables the systemd units.
+
+```bash
+deploy/sync_to_pi.sh --dry-run --install   # see what it would do
+deploy/sync_to_pi.sh --install             # first deploy
+deploy/sync_to_pi.sh                       # later code updates
+ssh pi sudo systemctl start leaving-x-backfill
+```
+
+It deploys to `pi:projects/leaving-x` by default (the `pi` ssh alias); set `DEPLOY_HOST` and `DEPLOY_DIR` to change that. The unit files assume user `jim` and `/home/jim/projects/leaving-x`.
+
+Keeping an eye on things:
+
+```bash
+ssh pi journalctl -u leaving-x-backfill -f          # backfill progress
+ssh pi journalctl -u leaving-x-on-this-day -n 50    # recent "On this day" runs
+ssh pi systemctl list-timers leaving-x-on-this-day.timer
+```
 
 ---
 
@@ -163,6 +226,6 @@ This project is configured for easy debugging in Visual Studio Code.
 
 1.  Open the project folder in VS Code.
 2.  Navigate to the **Run and Debug** view (Ctrl+Shift+D).
-3.  A dropdown menu at the top will contain pre-configured launch options for all scripts (e.g., "Run Poster: Dry Run", "Run Deleter: Dry Run").
+3.  A dropdown menu at the top will contain pre-configured launch options for the poster and the deleter (e.g., "Run Poster: Dry Run from Last Post", "Run Deleter: Dry Run").
 4.  Set breakpoints in the code by clicking in the gutter next to the line numbers.
 5.  Select a configuration from the dropdown and press the green "Start Debugging" button (F5).
